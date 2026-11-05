@@ -154,6 +154,48 @@ class VedicZeroTouchDaemon:
             log(f"Error fetching funds: {e}")
             return 0.0
 
+    def get_dynamic_compounding_qty(self, sec_id, price, transaction_type="BUY"):
+        """
+        Institutional Dynamic Compounding:
+        Queries Dhan's live Margin API to get exact leverage and margin per share,
+        then calculates compounding quantity using 85% of available balance (15% safety buffer).
+        """
+        avail = self.get_funds()
+        if self.mode == "micro":
+            return 1, round(price / 5.0, 2), 5.0
+            
+        payload = {
+            'dhanClientId': self.client_id,
+            'exchangeSegment': 'NSE_EQ',
+            'transactionType': transaction_type,
+            'quantity': 1,
+            'productType': 'INTRADAY',
+            'securityId': str(sec_id),
+            'price': float(price)
+        }
+        
+        try:
+            res = requests.post('https://api.dhan.co/v2/margincalculator', headers=self.headers, json=payload, timeout=5).json()
+            margin_per_share = float(res.get("totalMargin", 0))
+            leverage_str = str(res.get("leverage", "5.00X"))
+            leverage_val = float(leverage_str.replace("X", "").strip())
+            
+            if margin_per_share <= 0:
+                margin_per_share = price / (leverage_val if leverage_val > 0 else 5.0)
+                
+            # 85% fractional allocation (15% cash safety buffer for volatility)
+            allocable_cash = avail * 0.85
+            qty = int(allocable_cash / margin_per_share)
+            qty = max(1, qty)
+            
+            log(f"⚡ Live Dhan Margin API: Leverage={leverage_str} | Margin/Share=₹{margin_per_share:.2f} | Wallet=₹{avail:.2f} -> Compounded Qty={qty} shares")
+            return qty, margin_per_share, leverage_val
+        except Exception as e:
+            log(f"Margin API query exception: {e}. Fallback to 5x margin.")
+            margin_per_share = round(price / 5.0, 2)
+            qty = max(1, int((avail * 0.85) / margin_per_share))
+            return qty, margin_per_share, 5.0
+
     def is_trading_day(self):
         """Checks if today is a weekday and not an NSE holiday."""
         today = datetime.date.today()
@@ -273,10 +315,10 @@ class VedicZeroTouchDaemon:
         score = pick["score"]
         
         avail = self.get_funds()
-        qty = 1 if self.mode == "micro" else max(1, int((avail * 3.0) / pick["price"]))
+        qty, margin_per_share, leverage = self.get_dynamic_compounding_qty(sec_id, pick["price"], action)
         
         log(f"[{window_name}] 🏆 TOP PICK: {action} {qty} {sym} (Conviction: {score}/100)")
-        log(f"   Setup: {setup} | Current Price: ~₹{pick['price']:.2f}")
+        log(f"   Setup: {setup} | Current Price: ~₹{pick['price']:.2f} | Leverage: {leverage}x | Margin/Share: ₹{margin_per_share:.2f}")
         
         order_payload = {
             'dhanClientId': self.client_id,
@@ -310,7 +352,7 @@ class VedicZeroTouchDaemon:
         send_telegram_alert(
             f"🚀 *{window_name} Trade Executed*\n"
             f"*Stock:* `{sym}`\n"
-            f"*Action:* `{action}` {qty} Share(s)\n"
+            f"*Action:* `{action}` {qty} Share(s) (Leverage: {leverage}x)\n"
             f"*Setup:* {setup} (Conviction: {score}/100)\n"
             f"*Dhan Order ID:* `{order_id}`",
             self.telegram_bot_token, self.telegram_chat_id
@@ -331,10 +373,12 @@ class VedicZeroTouchDaemon:
                 pass
                 
         is_long = (action == "BUY")
-        tp = round(exec_price * (1.0035 if is_long else 0.9965), 2)
-        sl = round(exec_price * (0.9975 if is_long else 1.0025), 2)
+        # Fine-Tuned Asymmetric 1:2.0 Risk-to-Reward: Target +0.40%, Initial SL -0.20%
+        tp = round(exec_price * (1.0040 if is_long else 0.9960), 2)
+        sl = round(exec_price * (0.9980 if is_long else 1.0020), 2)
+        trailing_be_triggered = False
         
-        log(f"Position Active: Entry ₹{exec_price:.2f} | TP (+0.35%): ₹{tp:.2f} | SL (-0.25%): ₹{sl:.2f}")
+        log(f"Position Active: Entry ₹{exec_price:.2f} | TP (+0.40%): ₹{tp:.2f} | SL (-0.20%): ₹{sl:.2f} | Qty: {qty}")
         log("📡 Streaming live price ticks until Target or SL...")
         
         # Tick Monitoring Loop
@@ -358,6 +402,15 @@ class VedicZeroTouchDaemon:
                 pnl = ((cur_p - exec_price) if is_long else (exec_price - cur_p)) * qty
                 pnl_pct = (pnl / (exec_price * qty)) * 100.0
                 
+                # ATHARVAVEDA SATYA ZERO-RISK LOCK:
+                # Once trade reaches +0.18% in profit, trail SL to Breakeven (+0.05% buffer)
+                if not trailing_be_triggered and pnl_pct >= 0.18:
+                    be_sl = round(exec_price * (1.0005 if is_long else 0.9995), 2)
+                    if (is_long and be_sl > sl) or (not is_long and be_sl < sl):
+                        sl = be_sl
+                        trailing_be_triggered = True
+                        log(f"🛡️ SATYA LOCK TRIGGERED: PnL reached +{pnl_pct:.2f}%! Stop Loss trailed to BREAKEVEN (₹{sl:.2f}). Trade is now ZERO RISK!")
+                
                 emoji = "🟢" if pnl >= 0 else "🔴"
                 if iteration % 4 == 0:
                     log(f"{emoji} Live: ₹{cur_p:.2f} | PnL: ₹{pnl:+.2f} ({pnl_pct:+.2f}%) | TP: ₹{tp:.2f} | SL: ₹{sl:.2f}")
@@ -370,11 +423,11 @@ class VedicZeroTouchDaemon:
                 
                 if hit_tp or hit_sl or is_eod:
                     if hit_tp:
-                        reason = "🎯 TARGET HIT (+0.35%)"
+                        reason = "🎯 TARGET HIT (+0.40%)"
                         outcome = "TARGET_HIT"
                     elif hit_sl:
-                        reason = "🛡️ KAVACHA SL PROTECTED (-0.25%)"
-                        outcome = "SL_HIT"
+                        reason = "🛡️ SL PROTECTED" if not trailing_be_triggered else "🛡️ BREAKEVEN SATYA EXIT (+0.05%)"
+                        outcome = "SL_HIT" if not trailing_be_triggered else "BREAKEVEN_EXIT"
                     else:
                         reason = "⏰ EOD 15:15 SQUARE-OFF"
                         outcome = "EOD_EXIT"
