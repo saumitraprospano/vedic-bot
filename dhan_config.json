@@ -1,0 +1,12 @@
+{
+    "client_id": "1000544603",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzkzOTUzMDg2LCJpYXQiOjE3OTM4NjY2ODYsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.tKDqSHgMW8ZHXx7iAkDO2K3NbwzzSRBCR8wWyKmwTbgnWu3kYRDManMsLd1M1i5Q7qQfu28cFF-RUAmCYBrMvA",
+    "mode": "micro",
+    "paper_trading_mode": false,
+    "capital": 50000.0,
+    "margin_multiplier": 3.0,
+    "daily_target": 1000.0,
+    "max_trades_per_day": 2,
+    "telegram_bot_token": "",
+    "telegram_chat_id": ""
+}
