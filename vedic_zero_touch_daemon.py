@@ -91,8 +91,13 @@ class VedicZeroTouchDaemon:
         self.load_scrips()
         self.init_dhan()
         self.candidates = [
-            'TATASTEEL', 'WIPRO', 'ONGC', 'NTPC', 'POWERGRID',
-            'COALINDIA', 'IOC', 'GAIL', 'SAIL', 'BEL', 'BHEL'
+            'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 
+            'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT', 'AXISBANK',
+            'ASIANPAINT', 'TITAN', 'BAJFINANCE', 'MARUTI', 'SUNPHARMA',
+            'ULTRACEMCO', 'NTPC', 'ONGC', 'POWERGRID', 'TATASTEEL',
+            'JSWSTEEL', 'M&M', 'COALINDIA', 'ADANIPORTS', 'BPCL',
+            'CIPLA', 'WIPRO', 'DRREDDY', 'HEROMOTOCO', 'BAJAJ-AUTO',
+            'BEL', 'BHEL'
         ]
         
     def load_config(self):
@@ -185,15 +190,20 @@ class VedicZeroTouchDaemon:
                 
             # 85% fractional allocation (15% cash safety buffer for volatility)
             allocable_cash = avail * 0.85
-            qty = int(allocable_cash / margin_per_share)
+            unconstrained_exposure = allocable_cash * leverage_val
+            actual_exposure = min(unconstrained_exposure, 2000000.0) # Realistic NSE order book ceiling
+            qty = int(actual_exposure / price)
             qty = max(1, qty)
             
-            log(f"⚡ Live Dhan Margin API: Leverage={leverage_str} | Margin/Share=₹{margin_per_share:.2f} | Wallet=₹{avail:.2f} -> Compounded Qty={qty} shares")
+            log(f"⚡ Live Dhan Margin API: Leverage={leverage_str} | Margin/Share=₹{margin_per_share:.2f} | Wallet=₹{avail:.2f} -> Compounded Qty={qty} shares (Exposure: ₹{qty*price:,.2f})")
             return qty, margin_per_share, leverage_val
         except Exception as e:
             log(f"Margin API query exception: {e}. Fallback to 5x margin.")
             margin_per_share = round(price / 5.0, 2)
-            qty = max(1, int((avail * 0.85) / margin_per_share))
+            allocable_cash = avail * 0.85
+            unconstrained_exposure = allocable_cash * 5.0
+            actual_exposure = min(unconstrained_exposure, 2000000.0)
+            qty = max(1, int(actual_exposure / price))
             return qty, margin_per_share, 5.0
 
     def is_trading_day(self):
@@ -260,11 +270,20 @@ class VedicZeroTouchDaemon:
                 uw_pct = (upper_wick / c_range) * 100 if c_range > 0 else 0
                 
                 margin_needed = round(cur_price / 5.0, 2)
-                if self.mode == "micro" and margin_needed > (avail * 0.9):
-                    continue # Keep safe buffer in micro test
+                # Smart liquidity buffer: only consider candidates whose single-share margin fits within available funds
+                if margin_needed > (avail * 0.9):
+                    continue
                     
                 score_long = 60.0
                 score_short = 60.0
+                
+                # Institutional Volume Confirmation (1.15x 20-period Volume SMA)
+                vol_sma = df['Volume'].rolling(20).mean().iloc[-1] if len(df) >= 20 else df['Volume'].mean()
+                last_vol = df['Volume'].iloc[-1]
+                vol_ratio = (last_vol / vol_sma) if vol_sma > 0 else 1.0
+                if vol_ratio >= 1.15:
+                    score_long += 15.0
+                    score_short += 15.0
                 
                 if cur_price >= vwap:
                     score_long += 15.0
