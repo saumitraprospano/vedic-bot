@@ -161,11 +161,23 @@ class VedicZeroTouchDaemon:
     def get_funds(self):
         try:
             funds = self.dhan.get_fund_limits()
-            avail = float(funds.get("data", {}).get("availabelBalance", 0.0))
-            return avail
+            if funds.get("status") == "success":
+                avail = float(funds.get("data", {}).get("availabelBalance", 0.0))
+                return avail
+            else:
+                log(f"⚠️ Fund limit query status: {funds}. Auto-renewing token...")
+                if self.renew_daily_token():
+                    f2 = self.dhan.get_fund_limits()
+                    return float(f2.get("data", {}).get("availabelBalance", 0.0))
         except Exception as e:
-            log(f"Error fetching funds: {e}")
-            return 0.0
+            log(f"Funds query exception: {e}. Attempting automatic token renewal...")
+            if self.renew_daily_token():
+                try:
+                    f2 = self.dhan.get_fund_limits()
+                    return float(f2.get("data", {}).get("availabelBalance", 0.0))
+                except Exception:
+                    pass
+        return 0.0
 
     def get_dynamic_compounding_qty(self, sec_id, price, transaction_type="BUY"):
         """
