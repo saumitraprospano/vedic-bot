@@ -57,8 +57,14 @@ NSE_HOLIDAYS = {
     "2026-12-25", # Christmas
 }
 
+def get_ist_now():
+    """Returns current datetime strictly in Indian Standard Time (IST - UTC+05:30)."""
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    return utc_now.astimezone(ist_tz)
+
 def log(msg):
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = get_ist_now().strftime("%Y-%m-%d %H:%M:%S IST")
     formatted = f"[{ts}] {msg}"
     print(formatted, flush=True)
     try:
@@ -99,6 +105,8 @@ class VedicZeroTouchDaemon:
             'CIPLA', 'WIPRO', 'DRREDDY', 'HEROMOTOCO', 'BAJAJ-AUTO',
             'BEL', 'BHEL'
         ]
+        self.morning_traded_date = None
+        self.afternoon_traded_date = None
         
     def load_config(self):
         with open(CONFIG_FILE, "r") as f:
@@ -208,7 +216,7 @@ class VedicZeroTouchDaemon:
 
     def is_trading_day(self):
         """Checks if today is a weekday and not an NSE holiday."""
-        today = datetime.date.today()
+        today = get_ist_now().date()
         # 0 = Monday, 4 = Friday, 5 = Saturday, 6 = Sunday
         if today.weekday() >= 5:
             return False, "Weekend (Saturday/Sunday)"
@@ -437,7 +445,7 @@ class VedicZeroTouchDaemon:
                 hit_tp = (cur_h >= tp or cur_p >= tp) if is_long else (cur_l <= tp or cur_p <= tp)
                 hit_sl = (cur_l <= sl or cur_p <= sl) if is_long else (cur_h >= sl or cur_p >= sl)
                 
-                now_check = datetime.datetime.now()
+                now_check = get_ist_now()
                 is_eod = (now_check.hour * 60 + now_check.minute) >= 915 # 15:15 IST
                 
                 if hit_tp or hit_sl or is_eod:
@@ -490,9 +498,10 @@ class VedicZeroTouchDaemon:
 
     def record_journal(self, symbol, action, qty, entry, exit_p, pnl, outcome, window):
         try:
+            now_ist = get_ist_now()
             record = {
-                "Date": datetime.date.today().strftime("%Y-%m-%d"),
-                "Time": datetime.datetime.now().strftime("%H:%M:%S"),
+                "Date": now_ist.strftime("%Y-%m-%d"),
+                "Time": now_ist.strftime("%H:%M:%S"),
                 "Window": window,
                 "Symbol": symbol,
                 "Action": action,
@@ -548,8 +557,9 @@ class VedicZeroTouchDaemon:
         log("🚀 Vedic Zero-Touch Autonomous Daemon started! Running 24/7 in background.")
         
         while True:
-            now = datetime.datetime.now()
+            now = get_ist_now()
             t_min = now.hour * 60 + now.minute
+            today_str = now.strftime("%Y-%m-%d")
             
             # 1. Daily Token Refresh at 08:30 AM (510 min)
             if t_min == 510 and now.second < 20:
@@ -570,20 +580,17 @@ class VedicZeroTouchDaemon:
                 log(f"🔔 Market OPEN! Live Dhan Wallet: ₹{bal:,.2f} | Mode: {self.mode.upper()}")
                 time.sleep(30)
                 
-            # 4. Morning Muhurta (09:45 AM - 585 min)
-            if 585 <= t_min < 600:
-                log("🌟 Pratah Muhurta Window (09:45 AM) OPEN. Scanning top liquid stocks...")
+            # 4. Morning Muhurta (09:45 AM - 10:15 AM IST: 585 to 615 min)
+            if 585 <= t_min < 615 and self.morning_traded_date != today_str:
+                log(f"🌟 Pratah Muhurta Window (09:45 - 10:15 AM IST) ACTIVE. Scanning top liquid stocks...")
+                self.morning_traded_date = today_str
                 self.execute_trade("Morning_Muhurta")
-                # Wait until window passes to prevent re-triggering
-                while (datetime.datetime.now().hour * 60 + datetime.datetime.now().minute) < 605:
-                    time.sleep(30)
                     
-            # 5. European Open Muhurta (13:15 PM - 795 min)
-            if 795 <= t_min < 810:
-                log("🌟 European Open Muhurta Window (13:15 PM) OPEN. Scanning institutional setups...")
+            # 5. European Open Muhurta (13:15 PM - 13:45 PM IST: 795 to 825 min)
+            if 795 <= t_min < 825 and self.afternoon_traded_date != today_str:
+                log(f"🌟 European Open Muhurta Window (13:15 - 13:45 PM IST) ACTIVE. Scanning institutional setups...")
+                self.afternoon_traded_date = today_str
                 self.execute_trade("Afternoon_Muhurta")
-                while (datetime.datetime.now().hour * 60 + datetime.datetime.now().minute) < 815:
-                    time.sleep(30)
                     
             # 6. Hard EOD Square-Off at 15:15 IST (915 min)
             if t_min == 915 and now.second < 20:

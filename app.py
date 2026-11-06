@@ -197,11 +197,16 @@ def start_bot_thread():
 # Start background thread automatically
 start_bot_thread()
 
+def get_ist_now():
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    return utc_now.astimezone(ist_tz)
+
 @app.route('/')
 def dashboard():
     global bot_engine
     funds = "0.00"
-    mode = "micro"
+    mode = "compounding"
     client_id = "1000544603"
     pos_count = 0
     open_pos_str = "None"
@@ -212,7 +217,10 @@ def dashboard():
             funds = f"{bot_engine.get_funds():,.2f}"
             mode = bot_engine.mode
             client_id = bot_engine.client_id
+        except Exception:
+            pass
             
+        try:
             # Check positions
             r = requests.get('https://api.dhan.co/v2/positions', headers=bot_engine.headers, timeout=5).json()
             if isinstance(r, list):
@@ -228,7 +236,7 @@ def dashboard():
     if os.path.exists(j_file):
         try:
             df = pd.read_csv(j_file)
-            today = datetime.date.today().strftime("%Y-%m-%d")
+            today = get_ist_now().strftime("%Y-%m-%d")
             df_today = df[df['Date'] == today]
             trades = df_today.to_dict('records')
         except Exception:
@@ -249,7 +257,7 @@ def health():
     """Endpoint for cron-job.org / UptimeRobot to keep Render container awake."""
     return jsonify({
         "status": "healthy",
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": get_ist_now().strftime("%Y-%m-%d %H:%M:%S IST"),
         "daemon": "running"
     }), 200
 

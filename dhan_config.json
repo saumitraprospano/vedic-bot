@@ -1,12 +1,15 @@
 {
     "client_id": "1000544603",
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzkzOTUzMDg2LCJpYXQiOjE3OTM4NjY2ODYsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.tKDqSHgMW8ZHXx7iAkDO2K3NbwzzSRBCR8wWyKmwTbgnWu3kYRDManMsLd1M1i5Q7qQfu28cFF-RUAmCYBrMvA",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzkzOTYyNzA1LCJpYXQiOjE3OTM4NzYzMDUsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.gLHIMsUNypp2kDfE35ar9_mSa7G4J2SLXKRqwAYaVJRYXG58cygElOe_Frj3gcQCl22iXba2WNVJ9wEDblIpmQ",
     "mode": "compounding",
     "paper_trading_mode": false,
     "capital": 50000.0,
     "margin_multiplier": 5.0,
-    "daily_target": 1000.0,
-    "max_trades_per_day": 2,
+    "allocation_ratio": 0.45,
+    "min_margin_threshold": 3500.0,
+    "daily_target": 1500.0,
+    "max_trades_per_day": 4,
+    "max_exposure_cap": 2500000.0,
     "telegram_bot_token": "",
     "telegram_chat_id": ""
 }
