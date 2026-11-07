@@ -91,6 +91,17 @@ def send_telegram_alert(msg, token=None, chat_id=None):
     except Exception:
         pass
 
+def generate_rfc6238_totp(secret):
+    import hmac, hashlib, time, base64, struct
+    secret = secret.replace(" ", "").strip().upper()
+    secret += '=' * ((8 - len(secret) % 8) % 8)
+    key = base64.b32decode(secret, True)
+    counter = struct.pack('>Q', int(time.time() / 30))
+    mac = hmac.new(key, counter, hashlib.sha1).digest()
+    offset = mac[-1] & 0x0f
+    binary = struct.unpack('>I', mac[offset:offset+4])[0] & 0x7fffffff
+    return f"{binary % 1000000:06d}"
+
 class VedicZeroTouchDaemon:
     def __init__(self):
         log("🎯 Initializing Quantum Shakti 100-Level Autonomous Cloud Daemon...")
@@ -98,6 +109,7 @@ class VedicZeroTouchDaemon:
         self.load_scrips()
         self.load_state()
         self.init_dhan()
+        self.ensure_valid_token()
         self.active_position = None
         
         # 100-Level Parameters
@@ -127,6 +139,8 @@ class VedicZeroTouchDaemon:
         self.allocation_ratio = float(self.cfg.get("allocation_ratio", 0.90))
         self.max_trades_per_day = 2
         self.max_exposure_cap = float(self.cfg.get("max_exposure_cap", 2000000.0))
+        self.pin = str(self.cfg.get("pin") or os.environ.get("DHAN_PIN", ""))
+        self.totp_secret = str(self.cfg.get("totp_secret") or os.environ.get("DHAN_TOTP_SECRET", ""))
         self.telegram_bot_token = self.cfg.get("telegram_bot_token", "")
         self.telegram_chat_id = self.cfg.get("telegram_chat_id", "")
 
@@ -200,16 +214,69 @@ class VedicZeroTouchDaemon:
             log("🔄 Contacting Dhan Gateway to auto-renew API token...")
             dl = DhanLogin(self.client_id)
             res = dl.renew_token(self.access_token)
-            new_tok = res.get("token")
+            new_tok = res.get("token") or res.get("accessToken")
             if new_tok:
                 self.access_token = new_tok
                 self.cfg["access_token"] = new_tok
                 self.save_config()
                 self.init_dhan()
-                log("✅ Dhan Access Token renewed successfully for next 24 hours!")
+                log("✅ Dhan Access Token renewed successfully via /RenewToken!")
                 return True
         except Exception as e:
             log(f"Token renewal notice: {e}")
+        return False
+
+    def auto_authenticate_via_totp(self):
+        if not self.pin or not self.totp_secret:
+            return False
+        try:
+            log("🔐 Performing autonomous Dhan login via PIN + TOTP RFC-6238...")
+            totp = generate_rfc6238_totp(self.totp_secret)
+            url = "https://auth.dhan.co/app/generateAccessToken"
+            params = {
+                "dhanClientId": str(self.client_id),
+                "pin": str(self.pin),
+                "totp": str(totp)
+            }
+            res = requests.post(url, params=params, timeout=10)
+            data = res.json()
+            new_tok = data.get("accessToken") or data.get("token")
+            if new_tok:
+                self.access_token = new_tok
+                self.cfg["access_token"] = new_tok
+                self.save_config()
+                self.init_dhan()
+                log("🎉 Successfully auto-authenticated with Dhan! Fresh Access Token acquired.")
+                send_telegram_alert(
+                    "🔑 *Dhan Autonomous Login Successful*\n"
+                    "Fresh Access Token generated automatically via TOTP.\n"
+                    "Zero manual intervention required!",
+                    self.telegram_bot_token, self.telegram_chat_id
+                )
+                return True
+            else:
+                log(f"⚠️ Dhan auto-login response: {data}")
+        except Exception as e:
+            log(f"❌ Exception in Dhan auto-login: {e}")
+        return False
+
+    def ensure_valid_token(self):
+        try:
+            funds = self.dhan.get_fund_limits()
+            if funds and funds.get("status") == "success":
+                log("✅ Dhan Access Token is verified active.")
+                return True
+        except Exception:
+            pass
+
+        if self.access_token:
+            if self.renew_daily_token():
+                return True
+
+        if self.auto_authenticate_via_totp():
+            return True
+
+        log("⚠️ Auto-login standby: To enable 100% automated zero-touch login forever, set 'pin' and 'totp_secret' in config.")
         return False
 
     def get_funds(self):
@@ -587,9 +654,9 @@ class VedicZeroTouchDaemon:
             t_min = now.hour * 60 + now.minute
             today_str = now.strftime("%Y-%m-%d")
             
-            # Daily Token Refresh at 08:30 AM IST
-            if t_min == 510 and now.second < 20:
-                self.renew_daily_token()
+            # Daily Autonomous Token Verification & Auto-Login (08:30 AM & 09:00 AM IST)
+            if (t_min == 510 or t_min == 540) and now.second < 20:
+                self.ensure_valid_token()
                 time.sleep(30)
                 
             is_trade_day, day_reason = self.is_trading_day()
