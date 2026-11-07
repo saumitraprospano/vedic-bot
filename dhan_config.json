@@ -1,11 +1,11 @@
 {
     "client_id": "1000544603",
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzk0MDI1NjYxLCJpYXQiOjE3OTM5MzkyNjEsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.DV7rp5nrHQE6mCuRZKF4mRnh7yGAGcnqUjd8QBmnGTF5YfX-WBmiY4yuIuE9d6iV5cyCWRsRkBBK_Uz3P-cc0w",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzk0MTY0MTgzLCJpYXQiOjE3OTQwNzc3ODMsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.2jjU1YkcdmgjMPcKmgYA6VM-teUOb0FJYWgojwniX1Ib5eiugEIGFRAON9zHdCHUcTJomkivyA1lhnJkosAxsQ",
     "mode": "compounding",
     "paper_trading_mode": false,
     "capital": 25200.19,
     "margin_multiplier": 5.0,
-    "allocation_ratio": 0.90,
+    "allocation_ratio": 0.9,
     "min_margin_threshold": 3500.0,
     "daily_target": 1500.0,
     "max_trades_per_day": 2,
