@@ -30,7 +30,7 @@ HTML_DASHBOARD = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vedic Bot Cloud Dashboard</title>
+    <title>Quantum Shakti Cloud Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -178,7 +178,7 @@ HTML_DASHBOARD = """
     </div>
 
     <div class="footer">
-        Zero-Touch Cloud Daemon • Render Free Tier • Auto Token Renewal Active
+        Quantum Shakti Cloud Daemon • 100-Level Pinnacle Engine • Render Free Tier
     </div>
 </body>
 </html>
