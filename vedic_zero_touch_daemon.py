@@ -109,8 +109,10 @@ class VedicZeroTouchDaemon:
         self.load_scrips()
         self.load_state()
         self.init_dhan()
-        self.ensure_valid_token()
         self.active_position = None
+        self.last_token_renew_time = time.time()
+        self.token_thread = threading.Thread(target=self._token_keeper_loop, daemon=True)
+        self.token_thread.start()
         
         # 100-Level Parameters
         self.tp1_pct = 0.0030          # +0.30% Tranche 1 (65% size)
@@ -227,6 +229,7 @@ class VedicZeroTouchDaemon:
                     self.cfg["access_token"] = new_tok
                     self.save_config()
                     self.init_dhan()
+                    self.last_token_renew_time = time.time()
                     log(f"✅ Dhan Access Token rolled forward successfully! Expiry: {data.get('expiryTime')}")
                     send_telegram_alert(
                         f"🔄 *Dhan Token Rolled Forward Successfully*\n"
@@ -240,6 +243,33 @@ class VedicZeroTouchDaemon:
         except Exception as e:
             log(f"❌ Token renewal exception: {e}")
         return False
+
+    def _token_keeper_loop(self):
+        """
+        24/7 Dedicated Background Heartbeat Thread:
+        Runs continuously regardless of weekends, holidays, or market status.
+        Proactively rolls the Dhan API token every 10 to 12 hours so it NEVER expires.
+        """
+        log("🛡️ 24/7 Dedicated TokenKeeper Thread started (Renews every 10-12h 365 days a year).")
+        # Run proactive renewal right away at boot
+        time.sleep(15)
+        self.ensure_valid_token()
+        
+        while True:
+            try:
+                time.sleep(60)
+                elapsed = time.time() - self.last_token_renew_time
+                # Proactively roll forward every 10 hours (well before 24-hour limit)
+                if elapsed >= 10 * 3600:
+                    log(f"⏰ TokenKeeper: {elapsed/3600:.1f} hours elapsed. Proactively rolling token forward (weekend/holiday agnostic)...")
+                    if self.renew_daily_token():
+                        self.last_token_renew_time = time.time()
+                    else:
+                        log("⚠️ TokenKeeper proactive renewal failed. Retrying in 5 minutes...")
+                        time.sleep(300)
+            except Exception as e:
+                log(f"❌ TokenKeeper thread exception: {e}")
+                time.sleep(60)
 
     def auto_authenticate_via_totp(self):
         if not self.pin or not self.totp_secret:
