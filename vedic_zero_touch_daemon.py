@@ -63,7 +63,7 @@ FALLBACK_SCRIP_IDS = {
 NSE_HOLIDAYS = {
     "2026-01-26", "2026-02-18", "2026-03-03", "2026-03-20", "2026-04-03",
     "2026-04-14", "2026-05-01", "2026-05-27", "2026-06-25", "2026-08-15",
-    "2026-10-02", "2026-10-20", "2026-11-09", "2026-11-10", "2026-11-24", "2026-12-25"
+    "2026-10-02", "2026-10-20", "2026-11-24", "2026-12-25"
 }
 
 def get_ist_now():
@@ -307,6 +307,14 @@ class VedicZeroTouchDaemon:
             return False, "Weekend (Saturday/Sunday)"
         today_str = today.strftime("%Y-%m-%d")
         if today_str in NSE_HOLIDAYS:
+            try:
+                t = yf.Ticker('^NSEI')
+                df = t.history(period='1d', interval='5m')
+                if not df.empty and df.index[-1].strftime('%Y-%m-%d') == today_str:
+                    log(f"⚠️ Notice: {today_str} was in holiday list, but live NSE ticks detected! Overriding to Trading Day.")
+                    return True, "Trading Day (Live Ticks Active)"
+            except Exception:
+                pass
             return False, f"NSE Market Holiday ({today_str})"
         return True, "Trading Day"
 
@@ -672,14 +680,9 @@ class VedicZeroTouchDaemon:
                 log(f"🔔 Market OPEN! Live Dhan Wallet: ₹{bal:,.2f} | Mode: {self.mode.upper()}")
                 time.sleep(30)
                 
-            # Window 1: Morning Muhurta (09:45 - 10:45 IST)
-            if 585 <= t_min < 645 and self.daily_trades_count == 0 and not self.day_target_achieved:
-                self.execute_trade("Morning_Window")
-                time.sleep(60)
-                
-            # Window 2: European Open Muhurta (13:15 - 14:15 IST)
-            if 795 <= t_min < 855 and self.daily_trades_count < 2 and not self.day_target_achieved:
-                self.execute_trade("Afternoon_Window")
+            # Active Trading Session Scanning (09:30 - 14:30 IST)
+            if 570 <= t_min < 870 and self.daily_trades_count < self.max_trades_per_day and not self.day_target_achieved:
+                self.execute_trade("Intraday_Scan")
                 time.sleep(60)
                 
             # Hard EOD Square-Off at 15:15 IST
