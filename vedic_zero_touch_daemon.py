@@ -211,19 +211,34 @@ class VedicZeroTouchDaemon:
 
     def renew_daily_token(self):
         try:
-            log("🔄 Contacting Dhan Gateway to auto-renew API token...")
-            dl = DhanLogin(self.client_id)
-            res = dl.renew_token(self.access_token)
-            new_tok = res.get("token") or res.get("accessToken")
-            if new_tok:
-                self.access_token = new_tok
-                self.cfg["access_token"] = new_tok
-                self.save_config()
-                self.init_dhan()
-                log("✅ Dhan Access Token renewed successfully via /RenewToken!")
-                return True
+            log("🔄 Proactively contacting Dhan Gateway to roll forward API token...")
+            headers = {
+                'access-token': self.access_token,
+                'dhanClientId': str(self.client_id),
+                'client-id': str(self.client_id),
+                'Content-Type': 'application/json'
+            }
+            r = requests.get('https://api.dhan.co/v2/RenewToken', headers=headers, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                new_tok = data.get("token") or data.get("accessToken")
+                if new_tok:
+                    self.access_token = new_tok
+                    self.cfg["access_token"] = new_tok
+                    self.save_config()
+                    self.init_dhan()
+                    log(f"✅ Dhan Access Token rolled forward successfully! Expiry: {data.get('expiryTime')}")
+                    send_telegram_alert(
+                        f"🔄 *Dhan Token Rolled Forward Successfully*\n"
+                        f"New Expiry: `{data.get('expiryTime')}`\n"
+                        f"Zero user intervention required!",
+                        self.telegram_bot_token, self.telegram_chat_id
+                    )
+                    return True
+            else:
+                log(f"⚠️ Token renewal response code {r.status_code}: {r.text}")
         except Exception as e:
-            log(f"Token renewal notice: {e}")
+            log(f"❌ Token renewal exception: {e}")
         return False
 
     def auto_authenticate_via_totp(self):
@@ -261,6 +276,12 @@ class VedicZeroTouchDaemon:
         return False
 
     def ensure_valid_token(self):
+        # 1. Proactively roll token forward if current token is active
+        if self.access_token:
+            if self.renew_daily_token():
+                return True
+
+        # 2. Check if current session still active
         try:
             funds = self.dhan.get_fund_limits()
             if funds and funds.get("status") == "success":
@@ -269,10 +290,7 @@ class VedicZeroTouchDaemon:
         except Exception:
             pass
 
-        if self.access_token:
-            if self.renew_daily_token():
-                return True
-
+        # 3. Fallback to TOTP auto-login if token expired
         if self.auto_authenticate_via_totp():
             return True
 
@@ -662,8 +680,8 @@ class VedicZeroTouchDaemon:
             t_min = now.hour * 60 + now.minute
             today_str = now.strftime("%Y-%m-%d")
             
-            # Daily Autonomous Token Verification & Auto-Login (08:30 AM & 09:00 AM IST)
-            if (t_min == 510 or t_min == 540) and now.second < 20:
+            # Daily Autonomous Token Rolling (Every 12 Hours: 08:30 AM, 09:00 AM & 20:30 PM IST)
+            if (t_min == 510 or t_min == 540 or t_min == 1230) and now.second < 20:
                 self.ensure_valid_token()
                 time.sleep(30)
                 
