@@ -1,6 +1,6 @@
 {
     "client_id": "1000544603",
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzk0MjkxNTM0LCJpYXQiOjE3OTQyMDUxMzQsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.IsaDp33-l6b7V7Y8-xFPlxfTZmQW83Lntj3_mnhVjLLFNZbOnzTWzVcbxy-lLSIMEvfLogdTpsdAQXGSRqAsRg",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzk0MzY3ODA1LCJpYXQiOjE3OTQyODE0MDUsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMDAwNTQ0NjAzIn0.rxBgIAu6KTlZVQ3Zv_7LFz84qYlX0gZ4kWALhN3LM3fRHd34IyOAX-oYFpyx6l2d0Ytc-12NAlbNINRAgeFluw",
     "mode": "compounding",
     "paper_trading_mode": false,
     "capital": 25200.19,
