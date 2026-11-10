@@ -277,6 +277,30 @@ class VedicZeroTouchDaemon:
         try:
             log("🔐 Performing autonomous Dhan login via PIN + TOTP RFC-6238...")
             totp = generate_rfc6238_totp(self.totp_secret)
+            # Try official dhanhq DhanLogin SDK first
+            try:
+                from dhanhq import DhanLogin
+                dl = DhanLogin(str(self.client_id))
+                res = dl.generate_token(str(self.pin), str(totp))
+                new_tok = res.get("accessToken") or res.get("token")
+                if new_tok:
+                    self.access_token = new_tok
+                    self.cfg["access_token"] = new_tok
+                    self.save_config()
+                    self.init_dhan()
+                    self.last_token_renew_time = time.time()
+                    log("🎉 Successfully auto-authenticated with Dhan via DhanLogin SDK! Fresh Access Token acquired.")
+                    send_telegram_alert(
+                        "🔑 *Dhan Autonomous Login Successful*\n"
+                        "Fresh Access Token generated automatically via TOTP.\n"
+                        "Zero manual intervention required!",
+                        self.telegram_bot_token, self.telegram_chat_id
+                    )
+                    return True
+            except Exception as e_dl:
+                log(f"⚠️ DhanLogin SDK attempt notice: {e_dl}")
+
+            # Fallback to direct HTTP POST
             url = "https://auth.dhan.co/app/generateAccessToken"
             params = {
                 "dhanClientId": str(self.client_id),
@@ -291,6 +315,7 @@ class VedicZeroTouchDaemon:
                 self.cfg["access_token"] = new_tok
                 self.save_config()
                 self.init_dhan()
+                self.last_token_renew_time = time.time()
                 log("🎉 Successfully auto-authenticated with Dhan! Fresh Access Token acquired.")
                 send_telegram_alert(
                     "🔑 *Dhan Autonomous Login Successful*\n"
@@ -306,12 +331,7 @@ class VedicZeroTouchDaemon:
         return False
 
     def ensure_valid_token(self):
-        # 1. Proactively roll token forward if current token is active
-        if self.access_token:
-            if self.renew_daily_token():
-                return True
-
-        # 2. Check if current session still active
+        # 1. Check if current session / token is already active and verified
         try:
             funds = self.dhan.get_fund_limits()
             if funds and funds.get("status") == "success":
@@ -320,11 +340,16 @@ class VedicZeroTouchDaemon:
         except Exception:
             pass
 
-        # 3. Fallback to TOTP auto-login if token expired
+        # 2. Try autonomous login via PIN + TOTP (zero human interaction)
         if self.auto_authenticate_via_totp():
             return True
 
-        log("⚠️ Auto-login standby: To enable 100% automated zero-touch login forever, set 'pin' and 'totp_secret' in config.")
+        # 3. Proactively attempt token renewal if token string exists
+        if self.access_token:
+            if self.renew_daily_token():
+                return True
+
+        log("⚠️ Auto-login standby: To enable 100% automated zero-touch login forever, set 'pin' and 'totp_secret' in config or Render env vars.")
         return False
 
     def get_funds(self):
